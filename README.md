@@ -1,0 +1,1 @@
+`uvicorn mai:app --reload`
