@@ -3,6 +3,8 @@ from fastapi.responses import HTMLResponse
 from websocke.socketManager import WebSocketManager
 import json
 from fastapi.middleware.cors import CORSMiddleware
+import boto3
+from botocore.credentials import Credentials
 
 app = FastAPI()
 
@@ -14,8 +16,14 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-socket_manager = WebSocketManager()
+credentials = Credentials(
+    access_key='AKIAZI2LIVU6LEZUV6V2',
+    secret_key='VMln6FSakdi8KNtr+XOKPhIFHX2EmIfAcLF/Mh01',
+    token='your-session-token'
+)
+s3 = boto3.client('s3', credentials=credentials)
 
+socket_manager = WebSocketManager()
 
 html = """
 <!DOCTYPE html>
@@ -81,6 +89,31 @@ manager = ConnectionManager()
 async def get():
     return HTMLResponse(html)
 
+@app.websocket("/wse/{client_id}")
+async def websocket_endpoint(websocket: WebSocket, client_id: int):
+    await manager.connect(websocket)
+    try:
+        while True:
+            data = await websocket.receive_text()
+            await manager.send_personal_message(f"You wrote: {data}", websocket)
+            await manager.broadcast(f"Client #{client_id} says: {data}")
+            
+            s3_url = data
+            
+            try:
+                bucket, key = s3_url.split("//")[1].split("/", 1)
+                # Retrieve image data from S3
+                response = s3.get_object(Bucket=bucket, Key=key)
+                image_data = response['Body'].read()
+                # Send image data to the client
+                await websocket.send_bytes(image_data)
+                await websocket.send_text("You sent an image data!")
+            except Exception as e:
+                print(f"Error retrieving image from S3: {e}")
+    except WebSocketDisconnect:
+        manager.disconnect(websocket)
+        await manager.broadcast(f"Client #{client_id} left the chat")
+
 
 @app.websocket("/ws/{client_id}")
 async def websocket_endpoint(websocket: WebSocket, client_id: int):
@@ -92,12 +125,27 @@ async def websocket_endpoint(websocket: WebSocket, client_id: int):
     }
     await websocket.send_text(f"You wrote: {json.dumps(message)}")
     await socket_manager.broadcast_to_room(client_id, json.dumps(message))
+    
     try:
         while True:
             data = await websocket.receive_text()
+            await websocket.send_text(f'You sent an image data!{data}')
+
+            s3_url = data
+            
+            try:
+                bucket, key = s3_url.split("//")[1].split("/", 1)
+                # Retrieve image data from S3
+                response = s3.get_object(Bucket=bucket, Key=key)
+                image_data = response['Body'].read()
+                # Send image data to the client
+                await websocket.send_bytes(image_data)
+                await websocket.send_text("You sent an image data!")
+            except Exception as e:
+                print(f"Error retrieving image from S3: {e}")
+                
             # message = json.loads(data)
-            await websocket.send_text(f"You wrote: {data}")
-            await socket_manager.broadcast_to_room(client_id, data)
+            # await socket_manager.broadcast_to_room(client_id, data)
             # print('got message! ', message)
             # await manager.send_personal_message(f"You wrote: {data}", websocket)
             # await manager.broadcast(f"Client #{client_id} says: {data}")
