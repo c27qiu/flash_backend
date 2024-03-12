@@ -1,25 +1,14 @@
-import logging
-import uvicorn
-from fastapi.middleware.cors import CORSMiddleware
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi.responses import HTMLResponse
 from websocke.socketManager import WebSocketManager
 import json
-import argparse
-
-parser = argparse.ArgumentParser()
-parser.add_argument("-p", "--port", default=8000, type=int)
-args = parser.parse_args()
-
-
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger("FastAPI app")
+from fastapi.middleware.cors import CORSMiddleware
 
 app = FastAPI()
 
-# Adding the CORS middleware to the app
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["*"],  # You might want to restrict this to specific origins in a production environment
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -28,53 +17,90 @@ app.add_middleware(
 socket_manager = WebSocketManager()
 
 
-@app.websocket("/api/v1/ws/{room_id}/{user_id}")
-async def websocket_endpoint(websocket: WebSocket, room_id: str, user_id: int, user_type: str):
-    await socket_manager.add_user_to_room(room_id, websocket, user_type)
+html = """
+<!DOCTYPE html>
+<html>
+    <head>
+        <title>Chat</title>
+    </head>
+    <body>
+        <h1>WebSocket Chat</h1>
+        <h2>Your ID: <span id="ws-id"></span></h2>
+        <form action="" onsubmit="sendMessage(event)">
+            <input type="text" id="messageText" autocomplete="off"/>
+            <button>Send</button>
+        </form>
+        <ul id='messages'>
+        </ul>
+        <script>
+            var client_id = Date.now()
+            document.querySelector("#ws-id").textContent = client_id;
+            var ws = new WebSocket(`ws://localhost:8000/ws/${client_id}`);
+            ws.onmessage = function(event) {
+                var messages = document.getElementById('messages')
+                var message = document.createElement('li')
+                var content = document.createTextNode(event.data)
+                message.appendChild(content)
+                messages.appendChild(message)
+            };
+            function sendMessage(event) {
+                var input = document.getElementById("messageText")
+                ws.send(input.value)
+                input.value = ''
+                event.preventDefault()
+            }
+        </script>
+    </body>
+</html>
+"""
+
+
+class ConnectionManager:
+    def __init__(self):
+        self.active_connections: list[WebSocket] = []
+
+    async def connect(self, websocket: WebSocket):
+        await websocket.accept()
+        self.active_connections.append(websocket)
+
+    def disconnect(self, websocket: WebSocket):
+        self.active_connections.remove(websocket)
+
+    async def send_personal_message(self, message: str, websocket: WebSocket):
+        await websocket.send_text(message)
+
+    async def broadcast(self, message: str):
+        for connection in self.active_connections:
+            await connection.send_text(message)
+
+
+manager = ConnectionManager()
+
+
+@app.get("/")
+async def get():
+    return HTMLResponse(html)
+
+
+@app.websocket("/ws/{client_id}")
+async def websocket_endpoint(websocket: WebSocket, client_id: int):
+    await socket_manager.add_user_to_room(client_id, websocket)
+    # await manager.connect(websocket)
+    message = {
+        "user_id": client_id,
+        "message": f"User {client_id} connected"
+    }
+    await websocket.send_text(f"You wrote: {json.dumps(message)}")
+    await socket_manager.broadcast_to_room(client_id, json.dumps(message))
     try:
         while True:
             data = await websocket.receive_text()
-            message = json.loads(data)
-            print('got message! ', message)
-            # if message['type'] == 'change_detected' and user_type == 'cv_model':
-            #     await socket_manager.broadcast_to_room(room_id, data, user_type='gym_manager')
-            # elif message['type'] == 'change_approved' and user_type == 'gym_manager':
-            #     await socket_manager.broadcast_to_room(room_id, data)
-            # elif message['type'] == 'change_approved' and user_type == 'regular_user':
-            #     await socket_manager.broadcast_to_user(user_id, data)
-
+            # message = json.loads(data)
+            await websocket.send_text(f"You wrote: {data}")
+            await socket_manager.broadcast_to_room(client_id, data)
+            # print('got message! ', message)
+            # await manager.send_personal_message(f"You wrote: {data}", websocket)
+            # await manager.broadcast(f"Client #{client_id} says: {data}")
     except WebSocketDisconnect:
-        await socket_manager.remove_user_from_room(room_id, websocket)
-
-# @app.websocket("/api/v1/ws/{room_id}/{user_id}")
-# async def websocket_endpoint(websocket: WebSocket, room_id: str, user_id: int):
-#     await socket_manager.add_user_to_room(room_id, websocket)
-#     # message = {
-#     #     "user_id": user_id,
-#     #     "room_id": room_id,
-#     #     "message": f"User {user_id} connected to room - {room_id}"
-#     # }
-#     # await socket_manager.broadcast_to_room(room_id, json.dumps(message))
-#     try:
-#         while True:
-#             data = await websocket.receive_text()
-#             message = {
-#                 "user_id": user_id,
-#                 "room_id": room_id,
-#                 "message": data
-#             }
-#             await socket_manager.broadcast_to_room(room_id, json.dumps(message))
-
-#     except WebSocketDisconnect:
-#         await socket_manager.remove_user_from_room(room_id, websocket)
-
-#         message = {
-#             "user_id": user_id,
-#             "room_id": room_id,
-#             "message": f"User {user_id} disconnected from room - {room_id}"
-#         }
-#         await socket_manager.broadcast_to_room(room_id, json.dumps(message))
-
-
-if __name__ == "__main__":
-    uvicorn.run("main:app", host="127.0.0.1", port=args.port, reload=True)
+        manager.disconnect(websocket)
+        await manager.broadcast(f"Client #{client_id} left the chat")
