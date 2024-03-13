@@ -16,7 +16,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-s3 = boto3.client('s3', aws_access_key_id=ACCESS_KEY, aws_secret_access_key=SECRET_KEY, aws_session_token=SESSION_TOKEN)
+s3 = boto3.client('s3')
 
 socket_manager = WebSocketManager()
 
