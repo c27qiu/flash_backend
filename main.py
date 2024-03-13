@@ -93,7 +93,7 @@ async def websocket_endpoint(websocket: WebSocket, client_id: int):
             await manager.send_personal_message(f"You wrote: {data}", websocket)
             await manager.broadcast(f"Client #{client_id} says: {data}")
             
-            s3_url = data
+            s3_url = json.loads(data)
             print("data from sara ", s3_url)
             wall_name = s3_url["wall_name"]
             image_path = s3_url["image_path"]
