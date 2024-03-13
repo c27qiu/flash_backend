@@ -94,25 +94,25 @@ async def websocket_endpoint(websocket: WebSocket, client_id: int):
             await manager.send_personal_message(f"You wrote: {data}", websocket)
             await manager.broadcast(f"Client #{client_id} says: {data}")
             
-            s3_url = json.loads(data)
-            wall_name = s3_url["wall_name"]
-            image_path = s3_url["image_path"]
+            # s3_url = json.loads(data)
+            # wall_name = s3_url["wall_name"]
+            # image_path = s3_url["image_path"]
             
-            try:
-                bucket, key = "fydp-photos", image_path
-                print('bucket, key from sara ', bucket, key)
-                # Retrieve image data from S3
-                response = s3.get_object(Bucket=bucket, Key=key)
-                # print("response from sara ", response)
-                image_data = response['Body'].read()
-                base64_image = base64.b64encode(image_data).decode('utf-8')
-                await websocket.send_text(base64_image)
-                # print("image_data from sara ", image_data)
-                # Send image data to the client
-                # await websocket.send_bytes(image_data)
-                await websocket.send_text("You sent an image data!")
-            except Exception as e:
-                print(f"Error retrieving image from S3: {e}")
+            # try:
+            #     bucket, key = "fydp-photos", image_path
+            #     print('bucket, key from sara ', bucket, key)
+            #     # Retrieve image data from S3
+            #     response = s3.get_object(Bucket=bucket, Key=key)
+            #     # print("response from sara ", response)
+            #     image_data = response['Body'].read()
+            #     base64_image = base64.b64encode(image_data).decode('utf-8')
+            #     await websocket.send_text(base64_image)
+            #     # print("image_data from sara ", image_data)
+            #     # Send image data to the client
+            #     # await websocket.send_bytes(image_data)
+            #     await websocket.send_text("You sent an image data!")
+            # except Exception as e:
+            #     print(f"Error retrieving image from S3: {e}")
     except WebSocketDisconnect:
         manager.disconnect(websocket)
         await manager.broadcast(f"Client #{client_id} left the chat")
