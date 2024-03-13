@@ -99,7 +99,7 @@ async def websocket_endpoint(websocket: WebSocket, client_id: int):
             image_path = s3_url["image_path"]
             
             try:
-                bucket, key = image_path.split("/", 1)
+                bucket, key = "fydp-photos", image_path
                 print('bucket, key from sara ', bucket, key)
                 # Retrieve image data from S3
                 response = s3.get_object(Bucket=bucket, Key=key)
