@@ -94,12 +94,16 @@ async def websocket_endpoint(websocket: WebSocket, client_id: int):
             await manager.broadcast(f"Client #{client_id} says: {data}")
             
             s3_url = data
+            print("data from sara ", s3_url)
             
             try:
                 bucket, key = s3_url.split("//")[1].split("/", 1)
+                print('bucket, key from sara ', bucket, key)
                 # Retrieve image data from S3
                 response = s3.get_object(Bucket=bucket, Key=key)
+                print("response from sara ", response)
                 image_data = response['Body'].read()
+                print("image_data from sara ", image_data)
                 # Send image data to the client
                 await websocket.send_bytes(image_data)
                 await websocket.send_text("You sent an image data!")
