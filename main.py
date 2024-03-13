@@ -16,12 +16,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-credentials = Credentials(
-    access_key='AKIAZI2LIVU6LEZUV6V2',
-    secret_key='VMln6FSakdi8KNtr+XOKPhIFHX2EmIfAcLF/Mh01',
-    token='your-session-token'
-)
-s3 = boto3.client('s3', credentials=credentials)
+s3 = boto3.client('s3', aws_access_key_id=ACCESS_KEY, aws_secret_access_key=SECRET_KEY, aws_session_token=SESSION_TOKEN)
 
 socket_manager = WebSocketManager()
 
@@ -152,3 +147,7 @@ async def websocket_endpoint(websocket: WebSocket, client_id: int):
     except WebSocketDisconnect:
         manager.disconnect(websocket)
         await manager.broadcast(f"Client #{client_id} left the chat")
+        
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)
